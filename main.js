@@ -68,7 +68,23 @@ let keys = {
 
 window.addEventListener('resize', resizeCanvas)
 
+function checkBounds(object) {
+    if(object.x - object.rad <= 0) {
+        object.x = object.rad
+    }
+    if(object.x + object.rad >= canvas.width) {
+        object.x = canvas.width - object.rad
+    }
+    if(object.y + object.rad >= canvas.height) {
+        object.y = canvas.height - object.rad
+    }
+    if(object.y - object.rad <= 0) {
+        object.y = object.rad
+    }
+}
+
 function update(deltaTime) {
+    checkBounds(circle)
     if(keys.w) {
         circle.y -= speed * deltaTime
     } 
@@ -81,6 +97,7 @@ function update(deltaTime) {
     if(keys.d) {
         circle.x += speed * deltaTime
     }
+
 }
 
 function draw() {
