@@ -3,7 +3,7 @@ const ctx = canvas.getContext('2d')
 
 let lastTime = 0
 const speed = 500
-
+const shellVelocity = 1000
 
 let maincharacter = {
     x: 0,
@@ -13,6 +13,9 @@ let maincharacter = {
     stroke: "white",
     direction: 0,
 }
+
+let bullets = []
+
 function resizeCanvas() {
     canvas.width = window.innerWidth
     canvas.height = window.innerHeight
@@ -41,9 +44,8 @@ let keys = {
     a: false,
     s: false,
     d: false,
+    lmb: false,
 }
-
-
 
 
 
@@ -77,6 +79,24 @@ function inputHandler() {
         mouse.x = event.clientX
         mouse.y = event.clientY
     });
+
+    window.addEventListener('mousedown', (event) => {
+        if(event.button === 0) {
+            keys.lmb = true;
+            
+            bullets.push({
+                x: maincharacter.x + maincharacter.rad * Math.cos(maincharacter.direction),
+                y: maincharacter.y + maincharacter.rad * Math.sin(maincharacter.direction),
+                dir: maincharacter.direction,
+                rad: 2
+            })
+        }
+    })
+    window.addEventListener('mouseup', (event) => {
+        if(event.button === 0) {
+            keys.lmb = false;
+        }
+    })
 }
 inputHandler()
 
@@ -135,8 +155,12 @@ function handleCollision(character, obstacle) {
     }
 }
 
+function fireBullet(bullet, deltaTime) {
+    bullet.x += shellVelocity * deltaTime * Math.cos(bullet.dir)
+    bullet.y += shellVelocity * deltaTime * Math.sin(bullet.dir)
+}
+
 function update(deltaTime) {
-    checkBounds(maincharacter)
     if(keys.w) {
         maincharacter.y -= speed * deltaTime
     } 
@@ -148,6 +172,11 @@ function update(deltaTime) {
     }
     if(keys.d) {
         maincharacter.x += speed * deltaTime
+    }
+    for(let i = 0; i < bullets.length; i++) {
+        bullet = bullets[i]
+        bullet.x += shellVelocity * deltaTime * Math.cos(bullet.dir)
+        bullet.y += shellVelocity * deltaTime * Math.sin(bullet.dir)
     }
 
 }
@@ -182,6 +211,15 @@ function draw() {
     ctx.fill()
     ctx.stroke()
     ctx.closePath()
+
+    ctx.fillStyle = "white"
+    for(let i = 0; i < bullets.length; i++) {
+        bullet = bullets[i]
+        ctx.beginPath()
+        ctx.arc(bullet.x, bullet.y, bullet.rad, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.closePath()
+    }
 }
 
 function gameLoop(timeStamp) {
@@ -191,6 +229,7 @@ function gameLoop(timeStamp) {
     update(deltaTime)
     updateDirection()
     handleCollision(maincharacter, obstacle1)
+    checkBounds(maincharacter)
     draw()
     requestAnimationFrame(gameLoop)
 }
