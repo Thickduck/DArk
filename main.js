@@ -3,7 +3,8 @@ const ctx = canvas.getContext('2d')
 
 let lastTime = 0
 const speed = 500
-const shellVelocity = 1000
+const shellVelocity = 800
+const shellDamage = 10
 
 let maincharacter = {
     x: 0,
@@ -12,6 +13,8 @@ let maincharacter = {
     fill: "green",
     stroke: "white",
     direction: 0,
+    tag: "c",
+    health: 100
 }
 
 let bullets = []
@@ -24,15 +27,6 @@ function resizeCanvas() {
     maincharacter.y = canvas.height / 2
 }
 resizeCanvas()
-
-let obstacle1 = {
-    center: {
-        x: canvas.width / 4,
-        y: canvas.height / 4,
-    },
-    length: 300,
-    height: 100,
-}
 
 let mouse = {
     x: 0,
@@ -47,7 +41,41 @@ let keys = {
     lmb: false,
 }
 
+let obstacles = []
 
+function generateRoom(x, y, w, h, t) {
+    let rect1 = {
+        center: {
+            x: x - w/2 + t/2,
+            y: y,
+        },
+        length: t,
+        height: h - t,
+        tag: "o"
+    }
+    let rect2 = {
+        center: {
+            x: x + w/2 - t/2,
+            y: y
+        },
+        length: t,
+        height: h-t,
+        tag: "o"
+    }
+    let rect3 = {
+        center: {
+            x: x,
+            y: y - h/2 + t/2
+        },
+        length: w,
+        height: t,
+        tag: "o"
+    }
+    obstacles.push(rect1, rect2, rect3)
+}
+
+generateRoom(canvas.width / 4, canvas.height / 2, 200, 200, 10)
+generateRoom(canvas.width / 4 * 3, canvas.height /2, 200, 200, 10)
 
 function inputHandler() {
     window.addEventListener('keydown', (event) => {
@@ -88,7 +116,9 @@ function inputHandler() {
                 x: maincharacter.x + maincharacter.rad * Math.cos(maincharacter.direction),
                 y: maincharacter.y + maincharacter.rad * Math.sin(maincharacter.direction),
                 dir: maincharacter.direction,
-                rad: 2
+                rad: 2,
+                vx: shellVelocity * Math.cos(maincharacter.direction),
+                vy: shellVelocity * Math.sin(maincharacter.direction)
             })
         }
     })
@@ -128,7 +158,8 @@ function checkBounds(object) {
     }
 }
 
-function handleCollision(character, obstacle) {
+
+function checkCollision(character, obstacle) {
     const closestX = Math.max(obstacle.center.x - obstacle.length / 2, Math.min(character.x, obstacle.center.x + obstacle.length / 2))
     const closestY = Math.max(obstacle.center.y - obstacle.height / 2, Math.min(character.y, obstacle.center.y + obstacle.height / 2))
 
@@ -136,6 +167,14 @@ function handleCollision(character, obstacle) {
 
     const distanceSq = (closestX - character.x) * (closestX - character.x)  + (closestY - character.y) * (closestY - character.y)
     if (distanceSq <= character.rad * character.rad) isColliding = true
+
+    return isColliding
+}
+
+function handleCollision(character, obstacle) {
+    const closestX = Math.max(obstacle.center.x - obstacle.length / 2, Math.min(character.x, obstacle.center.x + obstacle.length / 2))
+    const closestY = Math.max(obstacle.center.y - obstacle.height / 2, Math.min(character.y, obstacle.center.y + obstacle.height / 2))
+    let isColliding = checkCollision(character, obstacle)
 
     if(character.y > obstacle.center.y + obstacle.height / 2 || character.y < obstacle.center.y - obstacle.height / 2) {
         if (closestY <= character.y && isColliding) {
@@ -154,10 +193,50 @@ function handleCollision(character, obstacle) {
         }
     }
 }
+function handleBulletReflection(obstacle) {
+    for(let i = 0; i < bullets.length; i++) {
+        let bullet = bullets[i]
+        const left = obstacle.center.x - obstacle.length / 2;
+        const right = obstacle.center.x + obstacle.length / 2;
+        const top = obstacle.center.y - obstacle.height / 2;
+        const bottom = obstacle.center.y + obstacle.height / 2;
+    
+        if (!checkCollision(bullet, obstacle)) continue;
+        
+        if(obstacle.tag === "c") {
+            obstacle.health -= shellDamage
+            console.log(`Health: ${obstacle.health}`)
+            bullets.splice(i, 1)
+            continue
+        }
 
-function fireBullet(bullet, deltaTime) {
-    bullet.x += shellVelocity * deltaTime * Math.cos(bullet.dir)
-    bullet.y += shellVelocity * deltaTime * Math.sin(bullet.dir)
+        const distToLeft = Math.abs(bullet.x - left);
+        const distToRight = Math.abs(bullet.x - right);
+        const distToTop = Math.abs(bullet.y - top);
+        const distToBottom = Math.abs(bullet.y - bottom);
+    
+        const closestWallDist = Math.min(distToLeft, distToRight, distToTop, distToBottom);
+    
+        if (closestWallDist === distToLeft || closestWallDist === distToRight) {
+            bullet.vx *= -1; 
+        } else {
+            bullet.vy *= -1; 
+        }
+    
+    
+        // very rough mechanical fix, nudging the bullet by a few pixels outside of the obstacle
+        // just so that it doesnt get stuck inside the box and do weird shit
+        bullet.x += (bullet.vx / Math.abs(bullet.vx || 1)) * 2;
+        bullet.y += (bullet.vy / Math.abs(bullet.vy || 1)) * 2;
+    }
+}
+
+function handleBulletCollisionWithPlayer(character, bullet) {
+    
+}
+
+function handleShooting(character) {
+
 }
 
 function update(deltaTime) {
@@ -173,10 +252,34 @@ function update(deltaTime) {
     if(keys.d) {
         maincharacter.x += speed * deltaTime
     }
-    for(let i = 0; i < bullets.length; i++) {
-        bullet = bullets[i]
-        bullet.x += shellVelocity * deltaTime * Math.cos(bullet.dir)
-        bullet.y += shellVelocity * deltaTime * Math.sin(bullet.dir)
+
+    updateDirection()
+    checkBounds(maincharacter)
+    
+    for(let i = 0; i < obstacles.length; i++) {
+        handleCollision(maincharacter, obstacles[i])
+    }
+    
+
+    for(let i = 0; i < obstacles.length; i++) {
+        handleBulletReflection(obstacles[i])
+    }
+    
+
+    // counting backwards to check every element despite the index change due to .splice()
+    for(let i = bullets.length - 1; i >= 0; i--) {
+        let bullet = bullets[i];
+        bullet.x += bullet.vx * deltaTime;
+        bullet.y += bullet.vy * deltaTime;
+
+        if (
+            bullet.x < 0 || 
+            bullet.x > canvas.width || 
+            bullet.y < 0 || 
+            bullet.y > canvas.height
+        ) {
+            bullets.splice(i, 1);
+        }
     }
 
 }
@@ -205,13 +308,15 @@ function draw() {
     ctx.closePath()
 
     ctx.beginPath()
-    ctx.rect(obstacle1.center.x - (obstacle1.length / 2), obstacle1.center.y - (obstacle1.height / 2), obstacle1.length, obstacle1.height)
-    ctx.strokeStyle = "white"
-    ctx.fillStyle = "yellow"
-    ctx.fill()
-    ctx.stroke()
+    for(let i = 0; i < obstacles.length; i++) {
+        ctx.rect(obstacles[i].center.x - (obstacles[i].length / 2), obstacles[i].center.y - (obstacles[i].height / 2), obstacles[i].length, obstacles[i].height)
+        ctx.strokeStyle = "white"
+        ctx.fillStyle = "yellow"
+        ctx.fill()
+        ctx.stroke()
+    }
     ctx.closePath()
-
+    ctx.beginPath()
     ctx.fillStyle = "white"
     for(let i = 0; i < bullets.length; i++) {
         bullet = bullets[i]
@@ -227,9 +332,6 @@ function gameLoop(timeStamp) {
     lastTime = timeStamp
 
     update(deltaTime)
-    updateDirection()
-    handleCollision(maincharacter, obstacle1)
-    checkBounds(maincharacter)
     draw()
     requestAnimationFrame(gameLoop)
 }
