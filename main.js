@@ -5,6 +5,7 @@ let lastTime = 0
 const speed = 500
 const shellVelocity = 800
 const shellDamage = 10
+const clipVisibility = false;
 
 export let maincharacter = {
     x: 0,
@@ -12,7 +13,7 @@ export let maincharacter = {
     rad: 40,
     fill: "green",
     stroke: "white",
-    direction: 0,
+    direction: 0, // radians
     tag: "c",
     health: 100
 }
@@ -51,7 +52,8 @@ let enemies = [{
     direction: 0,
     tag: "c",
     health: 100
-}]
+}, 
+]
 
 function generateRoom(x, y, w, h, t) {
     let rect1 = {
@@ -212,6 +214,7 @@ function checkCollisionWithCharacter(character1, character2) {
     return isColliding
 }
 
+
 function handleCollisionWithCharacter(character1, character2) {
     let isColliding = checkCollisionWithCharacter(character1, character2) 
     if (!isColliding) return
@@ -276,7 +279,6 @@ function update(deltaTime) {
     if(keys.s){
         maincharacter.y += speed * deltaTime
     }
-
     if(keys.a) {
         maincharacter.x -= speed * deltaTime
     }
@@ -331,69 +333,91 @@ function drawRay(x, y, dir, len) {
     ctx.stroke()
 }
 
-function drawUI() {
-    // initialise maincharacter hitbox
-    
+function drawVisibilityCone(angleDegrees) {
+    const length = canvas.width
+    const halfAngle = (angleDegrees / 2) * (Math.PI / 180)
+    const startAngle = maincharacter.direction - halfAngle
+    const endAngle = maincharacter.direction + halfAngle
     ctx.beginPath()
+    ctx.moveTo(maincharacter.x, maincharacter.y)
+    ctx.lineTo(maincharacter.x + length * Math.cos(startAngle), maincharacter.y + length * Math.sin(startAngle))
+    ctx.arc(maincharacter.x, maincharacter.y, length, startAngle, endAngle)
+    ctx.closePath()
+}
+
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    ctx.save()
+    
     ctx.fillStyle = "green"
     ctx.fillRect(maincharacter.x - maincharacter.rad, maincharacter.y - maincharacter.rad - 25, 2 * maincharacter.rad * maincharacter.health / 100, 10)
+
+    const angleDegrees = 120
+
+    if (clipVisibility) {
+        const length = canvas.width
+        const halfAngle = (angleDegrees / 2) * (Math.PI / 180)
+        const startAngle = maincharacter.direction - halfAngle
+        const endAngle = maincharacter.direction + halfAngle
+        ctx.beginPath()
+        ctx.moveTo(maincharacter.x, maincharacter.y)
+        ctx.lineTo(maincharacter.x + length * Math.cos(startAngle), maincharacter.y + length * Math.sin(startAngle))
+        ctx.moveTo(maincharacter.x, maincharacter.y)
+        ctx.lineTo(maincharacter.x + length * Math.cos(endAngle), maincharacter.y + length * Math.sin(endAngle))
+        ctx.strokeStyle = "white"
+        ctx.stroke()
+    }
+
+
+    if (clipVisibility) {
+        drawVisibilityCone(angleDegrees)
+        ctx.clip()
+    }
+    ctx.beginPath()
+    ctx.fillStyle = "yellow"
+    for(let i = 0; i < obstacles.length; i++) {
+        let o = obstacles[i]
+        ctx.fillRect(o.center.x - o.length/2, o.center.y - o.height/2, o.length, o.height)
+        ctx.strokeRect(o.center.x - o.length/2, o.center.y - o.height/2, o.length, o.height)
+    }
+
+    // Draw enemies
+    ctx.fillStyle = "red"
+    for(let i = 0; i < enemies.length; i++) {
+        let e = enemies[i]
+
+        ctx.beginPath()
+        drawRay(e.x, e.y, e.direction, e.rad)
+        ctx.arc(e.x, e.y, e.rad, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.stroke()
+    }
+    
+    // Draw bullets
+    ctx.fillStyle = "white"
+    for(let i = 0; i < bullets.length; i++) {
+        let b = bullets[i]
+        ctx.beginPath()
+        ctx.arc(b.x, b.y, b.rad, 0, Math.PI * 2)
+        ctx.fill()
+    }
+
+    ctx.beginPath()
     
     ctx.fillStyle = "red"
     for(let i = 0; i < enemies.length; i++){
         let enemy = enemies[i]
         ctx.fillRect(enemy.x - enemy.rad, enemy.y - enemy.rad - 25, 2 * enemy.rad * enemy.health / 100, 10)
     }
-}
 
-function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    ctx.lineWidth = 2
-
-    ctx.strokeRect(0.5, 0.5, canvas.width-0.5, canvas.height-0.5)
-
+    ctx.restore();
     ctx.beginPath()
     ctx.arc(maincharacter.x, maincharacter.y, maincharacter.rad, 0, Math.PI * 2)
     ctx.fillStyle = maincharacter.fill
-    ctx.strokeStyle = maincharacter.stroke
     ctx.fill()
     ctx.stroke()
     drawRay(maincharacter.x, maincharacter.y, maincharacter.direction, maincharacter.rad)
-    ctx.closePath()
-
-    ctx.beginPath()
-    for(let i = 0; i < obstacles.length; i++) {
-        ctx.rect(obstacles[i].center.x - (obstacles[i].length / 2), obstacles[i].center.y - (obstacles[i].height / 2), obstacles[i].length, obstacles[i].height)
-        ctx.strokeStyle = "white"
-        ctx.fillStyle = "yellow"
-        ctx.fill()
-        ctx.stroke()
-    }
-    ctx.closePath()
-    ctx.beginPath()
-    ctx.fillStyle = "white"
-    for(let i = 0; i < bullets.length; i++) {
-        let bullet = bullets[i]
-        ctx.beginPath()
-        ctx.arc(bullet.x, bullet.y, bullet.rad, 0, Math.PI * 2)
-        ctx.fill()
-        ctx.closePath()
-    }
-    ctx.closePath()
-    
-    ctx.beginPath()
-    for(let i = 0; i < enemies.length; i++) {
-        let enemy = enemies[i]
-        ctx.arc(enemy.x, enemy.y, enemy.rad, 0, Math.PI * 2)
-        ctx.fillStyle = enemy.fill
-        ctx.strokeStyle = enemy.stroke
-        ctx.fill()
-        ctx.stroke()
-        drawRay(enemy.x, enemy.y, enemy.direction, enemy.rad)
-    }
-    ctx.closePath()
-
-    // draw the ui
-    drawUI()
 }
 
 function gameLoop(timeStamp) {
