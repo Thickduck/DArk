@@ -27,7 +27,7 @@ export let maincharacter = {
     maxHealth: 100,
     isDead: false,
     lastTimeBeforeShooting: 0,
-    fireRate: 500, 
+    fireRate: 20, 
 }
 
 function resizeCanvas() {
@@ -45,9 +45,41 @@ let keys = { w: false, a: false, s: false, d: false, lmb: false }
 let bullets = []
 let obstacles = []
 let enemies = []
-
+let healthPacks = []
 
 let currentRoom = { x: 0, y: 0 }
+
+/**
+ * Finds a safe position for an entity, ensuring it doesn't spawn inside
+ * walls, inside enemies, or halfway off the canvas.
+ */
+function getSafePosition(rad, maxAttempts = 50) {
+    for (let i = 0; i < maxAttempts; i++) {
+        let x = Math.random() * (canvas.width - 2 * rad) + rad;
+        let y = Math.random() * (canvas.height - 2 * rad) + rad;
+        
+        let isSafe = true;
+
+        for (let o of obstacles) {
+            if (checkCollisionWithObject({ x, y, rad }, o)) {
+                isSafe = false;
+                break;
+            }
+        }
+
+        if (isSafe) {
+            for (let e of enemies) {
+                if (checkCollisionWithCharacter({ x, y, rad }, e)) {
+                    isSafe = false;
+                    break;
+                }
+            }
+        }
+
+        if (isSafe) return { x, y };
+    }
+    return { x: canvas.width / 2, y: canvas.height / 2 };
+}
 
 function loadRoom(roomX, roomY) {
     obstacles = []
@@ -55,12 +87,10 @@ function loadRoom(roomX, roomY) {
     bullets = []
     currentRoom = { x: roomX, y: roomY }
     
-    
     let numObstacles = Math.floor(Math.random() * 4) + 2; 
     for (let i = 0; i < numObstacles; i++) {
         let w = Math.random() * 200 + 50;
         let h = Math.random() * 200 + 50;
-        
         
         let obX = Math.random() * (canvas.width - 200) + 100;
         let obY = Math.random() * (canvas.height - 200) + 100;
@@ -72,7 +102,6 @@ function loadRoom(roomX, roomY) {
             tag: "o"
         });
     }
-
     
     let numEnemies = Math.floor(Math.random() * 3) + 1; 
     for (let i = 0; i < numEnemies; i++) {
@@ -91,6 +120,13 @@ function loadRoom(roomX, roomY) {
             aggroRange: 700,
             speed: 150 
         });
+    }
+    
+    if (Math.random() > 0.5) {
+        const pos = getSafePosition(10); 
+        healthPacks = [{ x: pos.x, y: pos.y, rad: 10 }];
+    } else {
+        healthPacks = [];
     }
 }
 loadRoom(0, 0) 
@@ -176,8 +212,6 @@ function checkBounds(object) {
         object.y = object.rad
     }
 }
-
-
 
 function checkCollisionWithObject(character, obstacle) {
     const closestX = Math.max(obstacle.center.x - obstacle.length / 2, Math.min(character.x, obstacle.center.x + obstacle.length / 2))
@@ -274,8 +308,6 @@ function handleBulletCollisionWithCharacter(character, bullet) {
     return isColliding
 }
 
-
-
 function hasLineOfSight(x1, y1, x2, y2) {
     for (let o of obstacles) {
         const left = o.center.x - o.length / 2;
@@ -331,7 +363,13 @@ function enemyAi(now, deltaTime) {
     }
 }
 
-
+function handleCollisionWithHealthPack(hp) {
+    let isColliding = checkCollisionWithCharacter(hp, maincharacter)
+    if(isColliding) {
+        maincharacter.health = Math.min(maincharacter.health + 50, 100)
+    }
+    return isColliding
+}
 
 function update(deltaTime) {
     if (gameState !== "PLAYING") return;
@@ -345,7 +383,6 @@ function update(deltaTime) {
 
     updateDirection()
     checkBounds(maincharacter)
-    
     
     enemyAi(now, deltaTime)
     
@@ -362,6 +399,13 @@ function update(deltaTime) {
 
     for(let i = 0; i < obstacles.length; i++) {
         handleBulletReflection(obstacles[i])
+    }
+
+    for(let i = healthPacks.length - 1; i >= 0; i--) {
+        let hp = healthPacks[i]
+        if(handleCollisionWithHealthPack(hp)) {
+            healthPacks.splice(i, 1)
+        }
     }
 
     for(let i = bullets.length - 1; i >= 0; i--) {
@@ -405,8 +449,6 @@ function update(deltaTime) {
         }
     }
 }
-
-
 
 function drawRay(x, y, dir, len) {
     ctx.moveTo(x, y)
@@ -496,6 +538,14 @@ function draw() {
         let b = bullets[i]
         ctx.beginPath()
         ctx.arc(b.x, b.y, b.rad, 0, Math.PI * 2)
+        ctx.fill()
+    }
+
+    ctx.fillStyle = "rgb(144, 238, 144)"
+    for(let i = 0; i < healthPacks.length; i++) {
+        let h = healthPacks[i]
+        ctx.beginPath()
+        ctx.arc(h.x, h.y, h.rad, 0, Math.PI * 2)
         ctx.fill()
     }
 
